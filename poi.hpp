@@ -35,6 +35,7 @@ public:
 private:
 	fstream target;			/* current .poi file to be handled by POIFS */
 
+	string rootdir;			/* root directory for mounting */
 	string mountname;		/* the file name of the mounted .poi */
 	int blockCapacity;		/* total size of the filesystem */
 	int availBlock;			/* number of empty blocks in the filesystem */
