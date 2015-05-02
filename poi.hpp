@@ -9,6 +9,11 @@
 #define ROOT_BLOCK 0x0000
 #define END_BLOCK 0xFFFF
 
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <fstream>
+#include <ctime>
 
 class POIFS {
 public:
@@ -40,6 +45,7 @@ private:
 	int blockCapacity;		/* total size of the filesystem */
 	int availBlock;			/* number of empty blocks in the filesystem */
 	int firstAvail;			/* number of the first available block in the data pool */
+	time_t mount_time;		/* time mounting .poi file */
 };
 
 #endif
