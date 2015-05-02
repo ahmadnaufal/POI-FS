@@ -24,7 +24,7 @@ public:
 	/* Create new .poi */
 	void createPoi(const char *filename);
 	/* Define the newly created .poi volume information */
-	void initVolumeInformation();
+	void initVolumeInformation(const char *filename, const char *rootname);
 	/* Define the newly created .poi allocation table (which refer to data pool) */
 	void initAllocTable();
 	/* Define the newly created .poi data pool */
@@ -36,10 +36,22 @@ public:
 	void readVolumeInformation();
 	/* Read the .poi allocation table */
 	void readAllocTable();
+	
+	void writeVolumeInformation();
+	void writeAllocationTable(ptr_block position);
+	
+	/* bagian alokasi block */
+	void setNextBlock(ptr_block position, ptr_block next);
+	ptr_block allocateBlock();
+	void freeBlock(ptr_block position);
+	
+	/* bagian baca/tulis block */
+	int readBlock(ptr_block position, char *buffer, int size, int offset = 0);
+	int writeBlock(ptr_block position, const char *buffer, int size, int offset = 0);
+
 
 private:
 	fstream target;			/* current .poi file to be handled by POIFS */
-
 	string rootdir;			/* root directory for mounting */
 	string mountname;		/* the file name of the mounted .poi */
 	int blockCapacity;		/* total size of the filesystem */
