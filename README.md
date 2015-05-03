@@ -19,7 +19,7 @@ Offset | Size (Byte) | Description
 0x24   | 4           | Block capacity of filesystem, integer 32-bit little endian.
 0x28   | 4           | Available block, integer 32-bit little endian.
 0x2C   | 4           | First available block, integer 32-bit little endian.
-0x30   | 32          | Entry block direktory for root ‘/’.
+0x30   | 32          | Entry block directory for root ‘/’.
 0x50   | 428         | Empty, ‘\0’ (null character).
 0x1FC  | 4           | "!iop", end of volume information.
 
