@@ -1,5 +1,5 @@
 #include "fuse_imp.hpp"
-#include "fuse_imp"
+#include "entry.hpp"
 
 
 /*** IMPLEMENTING FUSE OPERATIONS DEFINED ON THE API ***/
