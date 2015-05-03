@@ -10,7 +10,7 @@ int poi_getattr(const char *path, struct stat *stbuf) {
 		/* if path is the root path */
 		stbuf->st_nlink = 1;
 		stbuf->st_mode = S_IFDIR | 0777;
-
+		stbuf->st
 		return 0;
 	} else {
 		
