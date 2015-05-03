@@ -5,6 +5,7 @@
 #define BLOCK_SIZE 512
 #define ENTRY_SIZE 32
 #define DATAPOOL_BLOCK_N 65536
+#define DATAALLOCTABLE 256
 
 #define ROOT_BLOCK 0x0000
 #define END_BLOCK 0xFFFF
@@ -23,6 +24,7 @@ public:
 		// ctor
 		Entry();
 
+		// entry attribute getter
 		char* getNama();
 		char getAttribut();
 		short getTime();
@@ -30,6 +32,7 @@ public:
 		short getIndex();
 		int getSize();
 
+		// entry attribute setter
 		void setNama(const char* nama);
 		void setAttribut(const char attribut);
 		void setTime(const short time);
@@ -62,24 +65,27 @@ public:
 	void readAllocTable();
 	
 	void writeVolumeInformation();
-	void writeAllocationTable(ptr_block position);
+	void writeAllocationTable(short position);
 	
 	/* bagian alokasi block */
-	void setNextBlock(ptr_block position, ptr_block next);
-	ptr_block allocateBlock();
-	void freeBlock(ptr_block position);
+	void setNextBlock(short position, short next);
+	short allocateBlock();
+	void releaseBlock(short position);
 	
 	/* bagian baca/tulis block */
-	int readBlock(ptr_block position, char *buffer, int size, int offset = 0);
-	int writeBlock(ptr_block position, const char *buffer, int size, int offset = 0);
+	int readBlock(short position, char *buffer, int size, int offset = 0);
+	int writeBlock(short position, const char *buffer, int size, int offset = 0);
 
 
 	/*** NOT FINISHED YET ***/
 
 private:
 	fstream target;			/* current .poi file to be handled by POIFS */
+	
 	string rootdir;			/* root directory for mounting */
 	string mountname;		/* the file name of the mounted .poi */
+	short nextBlock[DATAPOOL_BLOCK_N];
+
 	int blockCapacity;		/* total size of the filesystem */
 	int availBlock;			/* number of empty blocks in the filesystem */
 	int firstAvail;			/* number of the first available block in the data pool */

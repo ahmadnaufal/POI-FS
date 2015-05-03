@@ -36,7 +36,7 @@ int poi_readdir(const char *, void *, fuse_fill_dir_t, off_t, struct fuse_file_i
 int poi_mkdir(const char *path, mode_t mode){
     if (getLastPath(std::string(path+1)).length() > 20) // the length of the name is longer than 20 char, it may be invoked by terminal
 		return -ENAMETOOLONG;
-	if (volume_information.getNumbFreeBlock() == 0) // check whether there is a block left
+	if (volume_information.getNumbreleaseBlock() == 0) // check whether there is a block left
 		return -EDQUOT;
 	
 	int idx = searchFile(path);
@@ -76,7 +76,7 @@ int poi_mknod(const char *path, mode_t mode, dev_t dev){
 	
 	if (getLastPath(std::string(path+1)).length() > 20) // the length of the name is longer than 20 char, it may be invoked by terminal
 		return -ENAMETOOLONG;
-	if (volume_information.getNumbFreeBlock() == 0) // check whether there is a block left
+	if (volume_information.getNumbreleaseBlock() == 0) // check whether there is a block left
 		return -EDQUOT;
 	
 	int idx = searchFile(path);
@@ -236,7 +236,7 @@ int poi_write(const char *path, const char *buf, size_t size, off_t offset, stru
 	int pos = 0;
 	while (size > 0) {
 		if (ptr == END_BLOCK) { // if the next block hasn't been created yet
-			if (volume_information.getNumbFreeBlock() != 0) {
+			if (volume_information.getNumbreleaseBlock() != 0) {
 				ptr = volume_information.frontBlock();
 				volume_information.popBlock();
 				

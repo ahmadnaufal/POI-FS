@@ -72,7 +72,7 @@ POIFS::~POIFS() {
 }
 
 /* Create new .poi */
-void createPoi(const char *filename, const char *rootname) {
+void POIFS::createPoi(const char *filename, const char *rootname) {
 	target.open(filename, fstream::in | fstream::out | fstream::binary | fstream::trunc);
 
 	/* Initialize the .poi volume information */
@@ -88,7 +88,7 @@ void createPoi(const char *filename, const char *rootname) {
 }
 
 /* Define the newly created .poi volume information */
-void initVolumeInformation(const char *filename, const char *rootname) {
+void POIFS::initVolumeInformation(const char *filename, const char *rootname) {
 	char buffer[BLOCK_SIZE];
 
 	memset(buffer, '\0', BLOCK_SIZE);
@@ -97,18 +97,17 @@ void initVolumeInformation(const char *filename, const char *rootname) {
 	memcpy(buffer + 0x00, "poi!", 4);
 
 	/* Set the filename */
-	char *fname;
-	if (mountname == NULL)
-		fname = "POI!";
+	if (filename == NULL)
+		mountname = "POI!";
 	else
-		fname = mountname;
+		mountname = mountname;
 	memcpy(buffer + 0x04, fname, strlen(fname));
 
 	/* initialize capacity of the filesystem */
-	blockCapacity = DATAPOOL_BLOCK_N + 1;
+	blockCapacity = DATAPOOL_BLOCK_N;
 	memcpy(buffer + 0x24, (char*)&blockCapacity, 4);
 
-	availBlock = DATAPOOL_BLOCK_N;
+	availBlock = DATAPOOL_BLOCK_N - 1;
 	memcpy(buffer + 0x28, (char*)&availBlock, 4);
 
 	/* initialize the first availBlock block */
@@ -126,28 +125,30 @@ void initVolumeInformation(const char *filename, const char *rootname) {
 }
 
 /* Define the newly created .poi allocation table (which refer to data pool) */
-void initAllocTable() {
+void POIFS::initAllocTable() {
 	short buffer = 0xFFFF;
+	char allocTable[DATAALLOCTABLE*BLOCK_SIZE];
+
+	memset(allocTable, 0, sizeof(allocTable));
 
 	/* Allocation for root */
-	target.write((char*)&buffer, sizeof(buffer));
-	for (int i = 1; i < DATAPOOL_BLOCK_N + 1; ++i)
-		target.write((char*)&buffer, sizeof(buffer));
+	memcpy(allocTable, (char*)&buf, sizeof(buf));
+
+	target.write(allocTable, sizeof(allocTable));
 }
 
 /* Define the newly created .poi data pool */
-void initDataPool() {
-	char buffer[BLOCK_SIZE];
+void POIFS::initDataPool() {
+	char buffer[DATAPOOL_BLOCK_N * BLOCK_SIZE];
 
-	memset(buffer, 0, BLOCK_SIZE);
+	/* Initialize data pool */
+	memset(buffer, 0, sizeof(buffer));
 
-	for (int i = 0; i < DATAPOOL_BLOCK_N + 1; ++i)
-		target.write(buffer, BLOCK_SIZE);
+	target.write(buffer, sizeof(buffer));
 }
 
 /* Read .poi */
-void readPoi(const char *filename){
-	target.open(filename, fstream::in | fstream::out | fstream::binary);
+void POIFS::readPoi(const char *filename){
 	/* cek apakah file ada */
 	try {
 		target.open(filename, fstream::in | fstream::out | fstream::binary);
@@ -156,6 +157,8 @@ void readPoi(const char *filename){
 		target.close();
 		throw runtime_error("File not found");
 		cout << e.what();
+
+		return;
 	}
 	/* periksa Volume Information */
 	readVolumeInformation();
@@ -164,121 +167,149 @@ void readPoi(const char *filename){
 }
 
 /* Read the .poi volume information */
-void readVolumeInformation(){
+void POIFS::readVolumeInformation(){
 	char buffer[BLOCK_SIZE];
-	target.seekg(0);
+	target.seekg(0x00);
 
 	target.read(buffer, BLOCK_SIZE);
 
 	if (string(buffer, 4) != "poi!") {
 		target.close();
 		throw runtime_error("File is not a valid POI file");
+		return;
 	}
-	/* baca capacity */
+
+	/* read blockCapacity */
 	memcpy((char*)&blockCapacity, buffer + 0x24, 4);
-	/* baca availBlock */
+	/* read availBlock */
 	memcpy((char*)&availBlock, buffer + 0x28, 4);
-	/* baca firstAvail */
+	/* read firstAvail */
 	memcpy((char*)&firstAvail, buffer + 0x2C, 4);
+	/* read the root directory */
+	memcpy((char*)&rootdir, buffer + 0x30, 32);
 }
 
 /* Read the .poi allocation table */
-void readAllocTable(){
+void POIFS::readAllocTable(){
 	char buffer[3];
+
 	/* pindah posisi ke awal Allocation Table */
 	target.seekg(0x200);
+
 	/* baca nilai nextBlock */
-	for (int i = 0; i < N_BLOCK; i++) {
+	for (int i = 0; i < DATAPOOL_BLOCK_N; i++) {
 		target.read(buffer, 2);
 		memcpy((char*)&nextBlock[i], buffer, 2);
 	}
 }
 
-void writeVolumeInformation(){
+void POIFS::writeVolumeInformation() {
 	target.seekp(0x00);
+
 	/* buffer untuk menulis ke file */
 	char buffer[BLOCK_SIZE];
-	memset(buffer, 0, BLOCK_SIZE);
-	/* Magic string "CCFS" */
-	memcpy(buffer + 0x00, "poi!", 4);
-	/* Nama volume */
-	memcpy(buffer + 0x04, filename.c_str(), filename.length());
-	/* Kapasitas filesystem, dalam little endian */
-	memcpy(buffer + 0x24, (char*)&blockCapacity, 4);
-	/* Jumlah blok yang belum terpakai, dalam little endian */
-	memcpy(buffer + 0x28, (char*)&availBlock, 4);
-	/* Indeks blok pertama yang bebas, dalam little endian */
-	memcpy(buffer + 0x2C, (char*)&firstAvail, 4);
-	/* String "!iop" */
-	memcpy(buffer + 0x1FC, "!iop", 4);
-	handle.write(buffer, BLOCK_SIZE);
-}
+	memset(buffer, '\0', BLOCK_SIZE);
 
-void writeAllocationTable(ptr_block position){
-	target.seekp(BLOCK_SIZE + sizeof(ptr_block) * position);
-	target.write((char*)&nextBlock[position], sizeof(ptr_block));
+	/* Set the magic string "poi!" */
+	memcpy(buffer + 0x00, "poi!", 4);
+
+	/* Set the filename */
+	memcpy(buffer + 0x04, mountname.c_str(), mountname.length());
+
+	/* initialize capacity of the filesystem */
+	memcpy(buffer + 0x24, (char*)&blockCapacity, 4);
+
+	memcpy(buffer + 0x28, (char*)&availBlock, 4);
+
+	/* initialize the first availBlock block */
+	memcpy(buffer + 0x2C, (char*)&firstAvail, 4);
+
+	/* Entry root directory block */
+	memcpy(buffer + 0x30, rootdir, 32); // BELUM SELESAI
+
+	/* Closing "!iop" statement */
+	memcpy(buffer + 0x1FC, "!iop", 4);
+
+	target.write(buffer, BLOCK_SIZE);
 }
 
 /* bagian alokasi block */
-void setNextBlock(ptr_block position, ptr_block next){
+void POIFS::writeAllocationTable(short position){
+	/* Go to the position of the file */
+	target.seekp(BLOCK_SIZE + (sizeof(position) * position));
+	target.write((char*)&nextBlock[position], sizeof(position));
+}
+
+/* pengaturan allocation table untuk next block */
+void POIFS::setNextBlock(short position, short next){
 	nextBlock[position] = next;
 	writeAllocationTable(position);
 }
 
-ptr_block allocateBlock(){
-	ptr_block result = firstAvail;
-	setNextBlock(result, END_BLOCK);
-	while (nextBlock[firstAvail] != 0x0000) {
+short POIFS::allocateBlock(){
+	short res = firstAvail;
+	setNextBlock(res, END_BLOCK);
+
+	/* iterate through the block until found an empty block */
+	while (nextBlock[firstAvail] != 0x0000)
 		firstAvail++;
-	}
+
 	availBlock--;
 	writeVolumeInformation();
-	return result;
+	return res;
 }
 
-void freeBlock(ptr_block position){
-	f (position == EMPTY_BLOCK) {
-	return;
-	}
+void POIFS::releaseBlock(short position){
+	/* if block is empty */
+	if (position == ROOT_BLOCK)
+		return;
+
+	/* release the outer block */
 	while (position != END_BLOCK) {
-		ptr_block temp = nextBlock[position];
-		setNextBlock(position, EMPTY_BLOCK);
+		short temp = nextBlock[position];
+		setNextBlock(position, ROOT_BLOCK);
 		position = temp;
 		availBlock--;
 	}
+
 	writeVolumeInformation();
 }
 
 /* bagian baca/tulis block */
-int readBlock(ptr_block position, char *buffer, int size, int offset = 0){
-	/* kalau sudah di END_BLOCK, return */
-	if (position == END_BLOCK) {
+int POIFS::readBlock(short position, char *buffer, int size, int offset = 0){
+	/* If at the end of file / END_BLOCK */
+	if (position == END_BLOCK)
 		return 0;
-	}
-	/* kalau offset >= BLOCK_SIZE */
+
+	/* if OFFSET is bigger than default BLOCK_SIZE */
 	if (offset >= BLOCK_SIZE) {
 		return readBlock(nextBlock[position], buffer, size, offset - BLOCK_SIZE);
 	}
-	target.seekg(BLOCK_SIZE * DATA_POOL_OFFSET + position * BLOCK_SIZE + offset);
-	int size_now = size;
-	/* cuma bisa baca sampai sebesar block size */
-	if (offset + size_now > BLOCK_SIZE) {
-		size_now = BLOCK_SIZE - offset;
+
+	target.seekg((BLOCK_SIZE * DATA_POOL_OFFSET) + (position * BLOCK_SIZE) + offset);
+	int curSize = size;
+
+	/* put offset outside BLOCK_SIZE */
+	if (offset + curSize > BLOCK_SIZE) {
+		curSize = BLOCK_SIZE - offset;
 	}
-	handle.read(buffer, size_now);
-	/* kalau size > block size, lanjutkan di nextBlock */
+
+	/* read data with curSize */
+	handle.read(buffer, curSize);
+	
 	if (offset + size > BLOCK_SIZE) {
-		return size_now + readBlock(nextBlock[position], buffer + BLOCK_SIZE, offset + size - BLOCK_SIZE);
+		return curSize + readBlock(nextBlock[position], buffer + BLOCK_SIZE, offset + size - BLOCK_SIZE);
 	}
-	return size_now;
+
+	return curSize;
 }
 
-int writeBlock(ptr_block position, const char *buffer, int size, int offset = 0){
-	/* kalau sudah di END_BLOCK, return */
-	if (position == END_BLOCK) {
+int POIFS::writeBlock(short position, const char *buffer, int size, int offset = 0){
+	/* If at the end of file / END_BLOCK */
+	if (position == END_BLOCK)
 		return 0;
-	}
-	/* kalau offset >= BLOCK_SIZE */
+
+	/* if OFFSET is bigger than default BLOCK_SIZE */
 	if (offset >= BLOCK_SIZE) {
 		/* kalau nextBlock tidak ada, alokasikan */
 		if (nextBlock[position] == END_BLOCK) {
@@ -286,21 +317,22 @@ int writeBlock(ptr_block position, const char *buffer, int size, int offset = 0)
 		}
 		return writeBlock(nextBlock[position], buffer, size, offset - BLOCK_SIZE);
 	}
+
 	handle.seekp(BLOCK_SIZE * DATA_POOL_OFFSET + position * BLOCK_SIZE + offset);
-	int size_now = size;
-	if (offset + size_now > BLOCK_SIZE) {
-		size_now = BLOCK_SIZE - offset;
+	int curSize = size;
+	if (offset + curSize > BLOCK_SIZE) {
+		curSize = BLOCK_SIZE - offset;
 	}
-	handle.write(buffer, size_now);
+	handle.write(buffer, curSize);
 	/* kalau size > block size, lanjutkan di nextBlock */
 	if (offset + size > BLOCK_SIZE) {
 	/* kalau nextBlock tidak ada, alokasikan */
 		if (nextBlock[position] == END_BLOCK) {
 			setNextBlock(position, allocateBlock());
 		}
-		return size_now + writeBlock(nextBlock[position], buffer + BLOCK_SIZE, offset + size - BLOCK_SIZE);
+		return curSize + writeBlock(nextBlock[position], buffer + BLOCK_SIZE, offset + size - BLOCK_SIZE);
 	}
-	return size_now;
+	return curSize;
 }
 
 /******* NOT FINISHED YET *******/
