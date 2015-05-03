@@ -3,8 +3,13 @@
 // Implementasi Inner class Entry
 
 // ctor
-POIFS::Entry::Entry(){
+POIFS::Entry::Entry() : entryPosition(0), off(0) {
 	memset(blockEntry, 0, ENTRY_SIZE);
+}
+
+POIFS::Entry::Entry(ushort enPos, char offs) : entryPosition(enPos), off(offs) {
+	target.seekg((BLOCK_SIZE * 257) + (entryPosition * BLOCK_SIZE) + (off * ENTRY_SIZE));
+	target.read(blockEntry, ENTRY_SIZE);
 }
 
 // getter
@@ -20,26 +25,143 @@ char POIFS::Entry::getAttribut(){
 
 short POIFS::Entry::getTime(){
 	short _time;
-	memcpy(_time, (short) &(blockEntry + 0x16), 2);
+	memcpy((char*)&_time, (blockEntry + 0x16), 2);
 	return _time;
 }
 
 short POIFS::Entry::getDate(){
 	short date;
-	memcpy(date, (short) &(blockEntry + 0x18), 2);
+	memcpy((char*)&date, blockEntry + 0x18, 2);
 	return date;
 }
 
 short POIFS::Entry::getIndex(){
 	short index;
-	memcpy(index, (short) &(blockEntry + 0x1A), 2);
+	memcpy((char*)&index, blockEntry + 0x1A, 2);
 	return index;
 }
 
 int POIFS::Entry::getSize(){
 	int size;
-	memcpy(size, (int) &(blockEntry + 0x1C), 4);
+	memcpy((char*)&size, blockEntry + 0x1C, 4);
 	return size;
+}
+
+// entry methods
+POIFS::Entry POIFS::Entry::getNextEntry() {
+	if (off < 15)
+		return Entry(entryPosition, off + 1);
+	else
+		return Entry(nextBlock[entryPosition], 0);
+}
+
+POIFS::Entry POIFS::Entry::getEntryfromPath(const char* path) {
+	// find root path
+	uint ed = 1;
+	while (path[ed] != '/' && string(path).length() > ed)
+		ed++;
+	
+	string rootPath = string(path + 1, ed - 1);
+	
+	// find the root directory's entry in entry
+	while (getNama() != rootPath && entryPosition != END_BLOCK)
+		*this = getNextEntry();
+	
+	// if root's entry is not found, pass empty entry
+	if (isEmpty())
+		return Entry();
+	else {
+		if (ed == string(path).length()) {
+			return *this;
+		}
+		else {
+			if (getAttribut() & 0x8) {
+				// the path is a directory
+				ushort idx;
+				memcpy((char*)&idx, blockEntry + 0x1A, 2);
+				Entry next(index, 0);
+
+				return next.getEntryfromPath(path + ed);
+			}
+			else {
+				// return empty entry
+				return Entry();
+			}
+		}
+	}
+}
+
+POIFS::Entry POIFS::Entry::getEmptyEntry() {
+	Entry tmp(*this);
+	
+	while (!tmp.isEmpty())
+		tmp = tmp.getNextEntry();
+	
+	if (tmp.entryPosition == END_BLOCK) {
+		// if all blocks are full, allocate new empty block for it
+		ushort newPos = allocateBlock();
+		ushort lastPos = entryPosition;
+
+		while (nextBlock[lastPos] != END_BLOCK)
+			lastPos = nextBlock[lastPos];
+		
+		setNextBlock(lastPos, newPos);
+		tmp.entryPosition = newPos;
+		tmp.off = 0;
+	}
+	
+	return tmp;
+}
+
+POIFS::Entry POIFS::Entry::getNewEntryfromPath(const char *path) {
+	// find root path
+	uint ed = 1;
+	while (path[ed] != '/' && string(path).length() > ed)
+		ed++;
+	
+	string rootPath = string(path + 1, ed - 1);
+	
+	// find the root directory's entry in entry
+	Entry tmp(entryPosition, off);
+	while (getNama() != rootPath && entryPosition != END_BLOCK)
+		*this = getNextEntry();
+	
+	// if root's entry is not found, pass another new entry
+	if (isEmpty()) {
+		while (!tmp.isEmpty()) {
+			if (tmp.getNextEntry().entryPosition == END_BLOCK)
+				tmp = Entry(allocateBlock(), 0);
+			else
+				tmp = tmp.getNextEntry();
+		}
+		
+		tmp.setNama(rootPath.c_str());
+		tmp.setAttribut(0xF);
+		tmp.setIndex(allocateBlock());
+		tmp.setSize(BLOCK_SIZE);
+		tmp.setTime(0);
+		tmp.setDate(0);
+
+		// write to file
+		tmp.writeEntry();
+		
+		*this = tmp;
+	}
+	
+	if (string(path).length() == ed)
+		return *this;
+	else {
+		/* cek apakah direktori atau bukan */
+		if (getAttribut() & 0x8) {
+			ushort index;
+			memcpy((char*)&index, blockEntry + 0x1A, 2);
+
+			Entry next(index, 0);
+			return next.getNewEntryfromPath(path + ed);
+		}
+		else
+			return Entry();
+	}
 }
 
 // setter
@@ -69,11 +191,51 @@ void POIFS::Entry::setSize(const int size){
 
 // fungsi dan method
 bool POIFS::Entry::isEmpty(){
-	return *(blockEntry) == NULL;
+	return *(blockEntry) == 0;
 }
 
 void POIFS::Entry::makeEmpty(){
 	memset(blockEntry, 0, ENTRY_SIZE);
+}
+
+time_t POIFS::Entry::getEntryTime() {
+	uint dt;
+	memcpy((char*)&dt, blockEntry + 0x16, 4);
+	
+	time_t tmp;
+	time(&tmp);
+	struct tm *res = localtime(&tmp);
+	
+	// get the time of the entry
+	res->tm_sec = dt & 0x1F;
+	res->tm_min = (dt >> 5u) & 0x3F;
+	res->tm_hour = (dt >> 11u) & 0x1F;
+	res->tm_mday = (dt >> 16u) & 0x1F;
+	res->tm_mon = (dt >> 21u) & 0xF;
+	res->tm_year = ((dt >> 25u) & 0x7F) + 10;
+	
+	time_t final = mktime(res);
+	return final;
+}
+
+void POIFS::Entry::setCurrentTime() {
+	time_t nowtime;
+	time(&now);
+	struct tm *now = localtime(&nowtime);
+	
+	int sc = now->tm_sec;
+	int mn = now->tm_min;
+	int hr = now->tm_hour;
+	int d = now->tm_mday;
+	int m = now->tm_mon;
+	int y = now->tm_year;
+	
+	int curtime = (hr << 11) | (mn << 5) | (sc >> 1);
+	int curdate = (d) | (m << 5) | ((y - 10) << 9);
+	
+	memcpy(blockEntry + 0x16, (char*)&curtime, 2);
+
+	memcpy(blockEntry + 0x18, (char*)&curdate, 2);
 }
 
 // Implementasi class POIFS
@@ -83,7 +245,7 @@ POIFS::POIFS() {
 	time(&mount_time);
 }
 POIFS::~POIFS() {
-	target.close()
+	target.close();
 }
 
 /* Create new .poi */
@@ -115,8 +277,8 @@ void POIFS::initVolumeInformation(const char *filename, const char *rootname) {
 	if (filename == NULL)
 		mountname = "POI!";
 	else
-		mountname = mountname;
-	memcpy(buffer + 0x04, fname, strlen(fname));
+		mountname = string(filename);
+	memcpy(buffer + 0x04, mountname.c_str(), mountname.length());
 
 	/* initialize capacity of the filesystem */
 	blockCapacity = DATAPOOL_BLOCK_N;
@@ -130,8 +292,8 @@ void POIFS::initVolumeInformation(const char *filename, const char *rootname) {
 	memcpy(buffer + 0x2C, (char*)&firstAvail, 4);
 
 	/* Entry root directory block */
-	rootdir = rootname;
-	memcpy(buffer + 0x30, rootdir, 32); // BELUM SELESAI
+	rootdir = string(rootname);
+	memcpy(buffer + 0x30, rootdir.c_str(), rootdir.length()); // BELUM SELESAI
 
 	/* Closing "!iop" statement */
 	memcpy(buffer + 0x1FC, "!iop", 4);
@@ -147,7 +309,7 @@ void POIFS::initAllocTable() {
 	memset(allocTable, 0, sizeof(allocTable));
 
 	/* Allocation for root */
-	memcpy(allocTable, (char*)&buf, sizeof(buf));
+	memcpy(allocTable, (char*)&buffer, sizeof(buffer));
 
 	target.write(allocTable, sizeof(allocTable));
 }
@@ -168,7 +330,7 @@ void POIFS::readPoi(const char *filename){
 	try {
 		target.open(filename, fstream::in | fstream::out | fstream::binary);
 	}
-	catch(exception& e){
+	catch (exception& e) {
 		target.close();
 		throw runtime_error("File not found");
 		cout << e.what();
@@ -178,7 +340,7 @@ void POIFS::readPoi(const char *filename){
 	/* periksa Volume Information */
 	readVolumeInformation();
 	/* baca Allocation Table */
-	readAllocationTable();
+	readAllocTable();
 }
 
 /* Read the .poi volume information */
@@ -240,7 +402,7 @@ void POIFS::writeVolumeInformation() {
 	memcpy(buffer + 0x2C, (char*)&firstAvail, 4);
 
 	/* Entry root directory block */
-	memcpy(buffer + 0x30, rootdir, 32);
+	memcpy(buffer + 0x30, rootdir.c_str(), rootdir.length());
 
 	/* Closing "!iop" statement */
 	memcpy(buffer + 0x1FC, "!iop", 4);
@@ -301,7 +463,7 @@ int POIFS::readBlock(short position, char *buffer, int size, int offset = 0){
 		return readBlock(nextBlock[position], buffer, size, offset - BLOCK_SIZE);
 	}
 
-	target.seekg((BLOCK_SIZE * DATA_POOL_OFFSET) + (position * BLOCK_SIZE) + offset);
+	target.seekg((BLOCK_SIZE * 257) + (position * BLOCK_SIZE) + offset);
 	int curSize = size;
 
 	/* put offset outside BLOCK_SIZE */
@@ -310,7 +472,7 @@ int POIFS::readBlock(short position, char *buffer, int size, int offset = 0){
 	}
 
 	/* read data with curSize */
-	handle.read(buffer, curSize);
+	target.read(buffer, curSize);
 	
 	if (offset + size > BLOCK_SIZE) {
 		return curSize + readBlock(nextBlock[position], buffer + BLOCK_SIZE, offset + size - BLOCK_SIZE);
@@ -333,12 +495,12 @@ int POIFS::writeBlock(short position, const char *buffer, int size, int offset =
 		return writeBlock(nextBlock[position], buffer, size, offset - BLOCK_SIZE);
 	}
 
-	handle.seekp(BLOCK_SIZE * DATA_POOL_OFFSET + position * BLOCK_SIZE + offset);
+	target.seekp(BLOCK_SIZE * 257 + position * BLOCK_SIZE + offset);
 	int curSize = size;
 	if (offset + curSize > BLOCK_SIZE) {
 		curSize = BLOCK_SIZE - offset;
 	}
-	handle.write(buffer, curSize);
+	target.write(buffer, curSize);
 	/* kalau size > block size, lanjutkan di nextBlock */
 	if (offset + size > BLOCK_SIZE) {
 	/* kalau nextBlock tidak ada, alokasikan */

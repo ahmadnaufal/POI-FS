@@ -6,307 +6,211 @@
 /* KALO BUTUH INFO TENTANG STAT BISA KE SINI http://codewiki.wikidot.com/c:struct-stat */
 
 int poi_getattr(const char *path, struct stat *stbuf) {
-	if (string(path) == "/") {
-		/* if path is the root path */
+	if (string(path) == "/"){
+		/* if the path is a root path */
 		stbuf->st_nlink = 1;
 		stbuf->st_mode = S_IFDIR | 0777;
-		stbuf->st
-		return 0;
+		stbuf->st_mtime = mount_time;
 	} else {
+		Entry entry = Entry(0, 0).getEntryfromPath(path);
 		
+		// if the path isn't found
+		if (entry.isEmpty())
+			return -ENOENT;
+		
+		stbuf->st_nlink = 1;
+
+		// if the entry is a directory
+		if (entry.getAttribut() & 0x8)
+			stbuf->st_mode = S_IFDIR | (0770 + (entry.getAttribut() & 0x7));
+		else
+			stbuf->st_mode = S_IFREG | (0660 + (entry.getAttribut() & 0x7));
+		
+		stbuf->st_size = entry.getSize();
+		stbuf->st_mtime = entry.getEntryTime();
 	}
+
+	return 0;
 }
 
-int poi_readdir(const char *, void *, fuse_fill_dir_t, off_t, struct fuse_file_info *){
-	log_msg("\nimplement_readdir(path=\"%s\", buf=0x%08x, filler=0x%08x, offset=%lld, fi=0x%08x)\n", path, buf, filler, offset, fi);
+int poi_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi){
+	// current working directory and root directory was defined to filler function
+	filler(buf, ".", NULL, 0);
+	filler(buf, "..", NULL, 0);
 	
-	filler(buf, ".", NULL, 0); // current directory
-	filler(buf, "..", NULL, 0); // parent directory
-		
-	int idx = searchFile(path);
+	Entry tmp = Entry(0,0).getEntryfromPath(path);
+	ushort index = tmp.getIndex();
+	tmp = Entry(index,0);
 	
-	idx = file[idx].getPointer(); // inside directory
-	while (idx != END_BLOCK) {
-		filler(buf, file[idx].getName().c_str(), NULL, 0);
-		idx = file[idx].getNextPointer();
+	// filler is applied to the dir
+	while (tmp.entryPosition != END_BLOCK) {
+		if(!tmp.isEmpty())
+			filler(buf, tmp.getNama().c_str(), NULL, 0);
+		tmp = tmp.getNextEntry();
 	}
+	
 	return 0;
 }
 
 int poi_mkdir(const char *path, mode_t mode){
-    if (getLastPath(std::string(path+1)).length() > 20) // the length of the name is longer than 20 char, it may be invoked by terminal
-		return -ENAMETOOLONG;
-	if (volume_information.getNumbreleaseBlock() == 0) // check whether there is a block left
-		return -EDQUOT;
+	int i;
+	for (i = string(path).length() - 1; path[i] != '/'; --i) {}
 	
-	int idx = searchFile(path);
+	/* get root directory */
+	string root = string(path, i);
 	
-	if (idx >= 0) // the folder already exists
-		return -EEXIST;
-		
-	// alocate new block
-	idx = volume_information.frontBlock();
-	volume_information.popBlock();
-	
-	// edit the previous entry pointer
-	int prev_idx = searchFile(std::string("/"+removeLastPath(std::string(path+1))).c_str());
-	if (file[prev_idx].getPointer() != END_BLOCK) { // if inside pointer is already filled, add to allocation table
-		prev_idx = file[prev_idx].getPointer();
-		while (file[prev_idx].getNextPointer() != END_BLOCK)
-			prev_idx = file[prev_idx].getNextPointer();
-		file[prev_idx].setNextPointer(idx);
-	}
-	else
-		file[prev_idx].setPointer(idx);
-	
-	// set up the folder entry
-	file[idx].setName(getLastPath(std::string(path+1)));
-	file[idx].setSize(0);
-	file[idx].setPointer(END_BLOCK);
-	file[idx].setNextPointer(END_BLOCK);
-	file[idx].setAttr(S_IFDIR | 0777);
-	file[idx].setDateTime(time(NULL));
-	log_msg("Folder's index : %d, pointing to %d\n", idx, file[idx].getPointer());
-	
+    Entry tmp;
+    if (root == "")
+    	// when the path is already the root path
+		tmp = Entry(0, 0);
+	else {
+		tmp = Entry(0,0).getEntryfromPath(root.c_str());
+		ushort index = tmp.getIndex();
+		tmp = Entry(index, 0);
+    }
+    
+    tmp = tmp.getEmptyEntry();		// find empty entry from root path
+    
+	tmp.setNama(path + i + 1);
+	tmp.setAttribut(0x0F);
+	tmp.setCurrentTime();
+	tmp.setIndex(allocateBlock());
+	tmp.setSize(0);
+
+	tmp.writeEntry();
+
 	return 0;
 }
 
 int poi_mknod(const char *path, mode_t mode, dev_t dev){
-	log_msg("\nimplement_mknod(path=\"%s\")\n", path);
+	int i;
+	for (i = string(path).length() - 1; path[i] != '/'; --i) {}
 	
-	if (getLastPath(std::string(path+1)).length() > 20) // the length of the name is longer than 20 char, it may be invoked by terminal
-		return -ENAMETOOLONG;
-	if (volume_information.getNumbreleaseBlock() == 0) // check whether there is a block left
-		return -EDQUOT;
+	/* get root directory */
+	string root = string(path, i);
 	
-	int idx = searchFile(path);
-	
-	if (idx >= 0) // the file already exists
-		return -EEXIST;
-		
-	// alocate new block
-	idx = volume_information.frontBlock();
-	volume_information.popBlock();
-	
-	// edit the previous entry pointer
-	int prev_idx = searchFile(std::string("/"+removeLastPath(std::string(path+1))).c_str());
-	if (file[prev_idx].getPointer() != END_BLOCK) { // if inside pointer is already filled, add to allocation table
-		prev_idx = file[prev_idx].getPointer();
-		while (file[prev_idx].getNextPointer() != END_BLOCK)
-			prev_idx = file[prev_idx].getNextPointer();
-		file[prev_idx].setNextPointer(idx);
-	}
-	else
-		file[prev_idx].setPointer(idx);
-	
-	// set up the file entry
-	file[idx].setName(getLastPath(std::string(path+1)));
-	file[idx].setSize(0);
-	file[idx].setPointer(0xFFFF);
-	file[idx].setNextPointer(0xFFFF);
-	file[idx].setAttr(S_IFREG | 0777);
-	file[idx].setDateTime(time(NULL));
-	log_msg("The file's index : %d, pointing to %d\n", idx, file[idx].getPointer());
-	
+    Entry tmp;
+    if (root == "")
+    	// when the path is already the root path
+		tmp = Entry(0, 0);
+	else {
+		tmp = Entry(0,0).getEntryfromPath(root.c_str());
+		ushort index = tmp.getIndex();
+		tmp = Entry(index, 0);
+    }
+    
+    tmp = tmp.getEmptyEntry();		// find empty entry from root path
+    
+	tmp.setNama(path + i + 1);
+	tmp.setAttribut(0x06);
+	tmp.setCurrentTime();
+	tmp.setIndex(allocateBlock());
+	tmp.setSize(0);
+
+	tmp.writeEntry();
+
 	return 0;
 }
 
-int poi_read(const char *, char *, size_t, off_t, struct fuse_file_info *){
-	log_msg("\nimplement_readdir(path=\"%s\", buf=0x%08x, filler=0x%08x, offset=%lld, fi=0x%08x)\n", path, buf, filler, offset, fi);
+int poi_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+	Entry tmp = Entry(0,0).getEntryfromPath(path);
+	ushort idx = tmp.getIndex();
 	
-	filler(buf, ".", NULL, 0); // current directory
-	filler(buf, "..", NULL, 0); // parent directory
-		
-	int idx = searchFile(path);
 	
-	idx = file[idx].getPointer(); // inside directory
-	while (idx != END_BLOCK) {
-		filler(buf, file[idx].getName().c_str(), NULL, 0);
-		idx = file[idx].getNextPointer();
-	}
+	if(tmp.isEmpty()) // if the entry is empty
+		return -ENOENT;
 	
-	return 0;
+	return readBlock(idx, buf, size, offset); // pass the reading to POIFS method readBlock
 }
 
 int poi_rmdir(const char *path){
-	log_msg("\nimplement_rmdir(path=\"%s\")\n", path);
-    
-    int idx = searchFile(path);
-    
-	if (file[idx].getPointer() != END_BLOCK) // the folder is not empty
-		return -ENOTEMPTY;
+	Entry tmp = Entry(0,0).getEntryfromPath(path);
 	
-	if (idx >= 0) {
-		int ptr = searchPrevFile(path);
-		if (ptr != END_BLOCK) {
-			file[ptr].setNextPointer(file[idx].getNextPointer());
-		}
-		else {
-			ptr = searchParentFolder(path);
-			file[ptr].setPointer(file[idx].getNextPointer());
-		}
-		volume_information.pushBlock(idx);
-	}
+	if(tmp.isEmpty())
+		return -ENOENT; // if the entry is empty, let it be
+	
+	// free the block from the entry index
+	releaseBlock(entry.getIndex());
+	
+	// make the entry becomes empty
+	tmp.makeEmpty();
 	
 	return 0;
 }
 
-int poi_unlink(const char *){
-	log_msg("\nimplement_rmdir(path=\"%s\")\n", path);
-    
-    int idx = searchFile(path);
-    
-	if (file[idx].getPointer() != END_BLOCK) // the folder is not empty
-		return -ENOTEMPTY;
-	
-	if (idx >= 0) {
-		int ptr = searchPrevFile(path);
-		if (ptr != END_BLOCK) {
-			file[ptr].setNextPointer(file[idx].getNextPointer());
-		}
-		else {
-			ptr = searchParentFolder(path);
-			file[ptr].setPointer(file[idx].getNextPointer());
-		}
-		volume_information.pushBlock(idx);
+int poi_unlink(const char *path){
+	Entry tmp = Entry(0,0).getEntryfromPath(path);
+
+	if (entry.getAttribut() & 0x8)	
+		return -ENOENT;		// if the entry is from a directory, let it be
+	else {
+		// free the block from the entry index
+		releaseBlock(entry.getIndex());	
+		// make the entry becomes empty
+		tmp.makeEmpty();
 	}
-	
+
 	return 0;
 }
 
-int poi_rename(const char *, const char *){
-	log_msg("\nimplement_rename(path=\"%s\", path_new=\"%s\")\n", path, path_new);
-    
-    std::string rename = getLastPath(std::string(path_new+1));
-	if (rename.length() > 20) // the length of the name is longer than 20 char
-		return -ENAMETOOLONG;
-	
-    int idx = searchFile(path); // the current block
-    int prev = searchPrevFile(path);
-    if (prev != END_BLOCK) {
-    	log_msg("Prev file : %d\n", prev);
-    	file[prev].setNextPointer(file[idx].getNextPointer());
-    }
-    else {
-    	prev = searchParentFolder(path);
-    	log_msg("Prev folder : %d\n", prev);
-    	file[prev].setPointer(file[idx].getNextPointer());
-    }
+int poi_rename(const char *oldpath, const char *newpath) {
+	Entry oldentry = Entry(0,0).getEntryfromPath(oldpath);
+	Entry newentry = Entry(0,0).getNewEntryfromPath(newpath);
 
-    int prev_new = searchParentFolder(path_new);
-    log_msg("Parent folder : %d\n", prev_new);
-    file[idx].setNextPointer(file[prev_new].getPointer()); // change the next pointer
-    file[prev_new].setPointer(idx); // set to first pointer only
+	if(!oldentry.isEmpty()){
+		// set all 
+		newentry.setName(oldentry.getNama().c_str());
+		newentry.setAttr(oldentry.getAttribut());
+		newentry.setIndex(oldentry.getIndex());
+		newentry.setSize(oldentry.getSize());
+		newentry.setTime(oldentry.getTime());
+		newentry.setDate(oldentry.getDate());
+		newentry.write();
+		/* set entry asal jadi kosong */
+		oldentry.makeEmpty();
+	}
+	else
+		return -ENOENT;
 	
-	file[idx].setName(rename); // rename it
 	return 0;
 }
 
 int poi_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi){
-	log_msg("\nimplement_write(path=\"%s\")\n", path);
-	log_msg("Size : %d, Offset : %d\n", size, offset);
+	Entry tmp = Entry(0,0).getEntryfromPath(path);
+
+	ushort idx = tmp.getIndex();
 	
-	int init_size = size;
-	
-	int idx = searchFile(path); // search the file
-	file[idx].setSize(file[idx].getSize()+size); // add to the file's size first
-	
-	if (idx < 0) // error no such file
+	// if the entry is empty, let it be
+	if(entry.isEmpty())
 		return -ENOENT;
 	
-	int ptr = file[idx].getPointer(); // point to file's data
-	log_msg("Index mula-mula : %d, Pointer mula-mula : %d\n", idx, ptr);
-	if (ptr == END_BLOCK) { // new file needs a new block
-		ptr = volume_information.frontBlock();
-		volume_information.popBlock();
-
-		file[idx].setPointer(ptr);
-		file[ptr].setNextPointer(END_BLOCK); // set new data's next pointer to END_BLOCK
-	}
+	tmp.setSize(offset + size);
+	tmp.writeEntry();
 	
-	// switch block until offset is less than a BLOCK_SIZE 
-	while (offset >= BLOCK_SIZE) {
-		idx = ptr;
-		ptr = file[idx].getNextPointer();
-		offset -= BLOCK_SIZE;
-	}
-
-	log_msg("Pointing to data : %d w/ Pointer : %d\n", idx, ptr);
-	
-	int pos = 0;
-	while (size > 0) {
-		if (ptr == END_BLOCK) { // if the next block hasn't been created yet
-			if (volume_information.getNumbreleaseBlock() != 0) {
-				ptr = volume_information.frontBlock();
-				volume_information.popBlock();
-				
-				log_msg("Create Index %d pointing to %d\n", idx, ptr);
-
-				file[idx].setNextPointer(ptr);
-				file[ptr].setNextPointer(END_BLOCK);
-			}
-			else
-				return -EFBIG; // File too large 
-		}
-		
-		idx = ptr; // switch to idx
-		ptr = file[idx].getNextPointer(); // ptr still becomes idx's next pointer
-		log_msg("Index %d pointing to %d\n", idx, ptr);
-
-		if (size+offset >= BLOCK_SIZE) {
-			memcpy(file[idx].currentPosHandler()+offset, buf+pos, BLOCK_SIZE-offset);
-			pos += BLOCK_SIZE-offset;
-			size -= BLOCK_SIZE-offset;
-		}
-		else {
-			memcpy(file[idx].currentPosHandler()+offset, buf+pos, size);
-			pos += size;
-			size = 0;
-		}
-		offset = 0;
-	}
-	log_msg("End of write\n");
-	return init_size;
+	return writeBlock(idx, buf, size, offset);;
 }
 
-int poi_truncate(const char *path, off_t newsize){
-	log_msg("\nimplement_truncate(path=\"%s\", offset = %d)\n", path, (int) newsize);
+int poi_truncate(const char *path, off_t newoff){
+	Entry tmp = Entry(0,0).getEntryfromPath(path);
 	
-	int idx = searchFile(path);
+	tmp.setSize(newoff);
+	tmp.writeEntry();
 	
-	file[idx].setSize(newsize);
-	int ptr = file[idx].getPointer();
-	
-	int count = 0;
-	while (count*BLOCK_SIZE < newsize) {
-		if (ptr == END_BLOCK) {
-			ptr = volume_information.frontBlock();
-			volume_information.popBlock();
-			file[idx].setNextPointer(ptr);
-			file[ptr].setNextPointer(END_BLOCK);
+	// the rest of using volume information
+	ushort position = tmp.getIndex();
+	while (newoff > 0) {
+		newoff -= BLOCK_SIZE;
+		if (newoff > 0) {	// allocate new entry when full
+			if (nextBlock[entryPosition] == END_BLOCK)
+				setNextBlock(entryPosition, allocateBlock());
+			entryPosition = nextBlock[entryPosition];
 		}
-		idx = ptr;
-		ptr = file[idx].getNextPointer();
-		count++;
 	}
 
-	if (count == 0) // set to END_BLOCK the previous block
-		file[idx].setPointer(END_BLOCK);
-	else
-		file[idx].setNextPointer(END_BLOCK);
-
-	std::stack<int> data;
-	while (ptr != END_BLOCK) {
-		data.push(ptr);
-		log_msg("Push to stack : %d\n", ptr);
-		ptr = file[ptr].getNextPointer();
-	}
-	while (!data.empty()) {
-		volume_information.pushBlock(data.top());
-		data.pop();
-	}
-
-	return newsize;
+	releaseBlock(nextBlock[entryPosition]);
+	setNextBlock(entryPosition, END_BLOCK);
+	
+	return 0;
 }
 
  /************************************/

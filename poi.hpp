@@ -1,6 +1,12 @@
 #ifndef POIFS_H
 #define POIFS_H
 
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <string>
+#include <ctime>
+
  /* Define constants used by the filesystem */
 #define BLOCK_SIZE 512
 #define ENTRY_SIZE 32
@@ -10,11 +16,7 @@
 #define ROOT_BLOCK 0x0000
 #define END_BLOCK 0xFFFF
 
-#include <cstdlib>
-#include <cstring>
-#include <string>
-#include <fstream>
-#include <ctime>
+using namespace std;
 
 class POIFS {
 public:
@@ -23,6 +25,7 @@ public:
 	public:
 		// ctor
 		Entry();
+		Entry(ushort enPos, char offs);
 
 		// entry attribute getter
 		char* getNama();
@@ -31,6 +34,12 @@ public:
 		short getDate();
 		short getIndex();
 		int getSize();
+
+		// entry method for the block data
+		Entry getNextEntry();
+		Entry getEntryfromPath(const char* path);
+		Entry getEmptyEntry();
+		Entry getNewEntryfromPath(const char* path);
 
 		// entry attribute setter
 		void setNama(const char* nama);
@@ -43,11 +52,14 @@ public:
 		// fungsi & method
 		bool isEmpty();
 		void makeEmpty();
-		
+
+		time_t getEntryTime();
+		void setCurrentTime();	
 
 	private:
-		char blockEntry[ENTRY_SIZE];
-		short entryPosition;
+		char blockEntry[ENTRY_SIZE];	/* the size of the entry block */
+		ushort entryPosition;			/* the position of the block */
+		char off;						/* offset of the block (from 0-15) */
 	};
 
 	// Constructor & Destructor
@@ -55,7 +67,7 @@ public:
 	~POIFS();
 
 	/* Create new .poi */
-	void createPoi(const char *filename);
+	void createPoi(const char *filename, const char *rootname);
 	/* Define the newly created .poi volume information */
 	void initVolumeInformation(const char *filename, const char *rootname);
 	/* Define the newly created .poi allocation table (which refer to data pool) */
