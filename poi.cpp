@@ -225,7 +225,7 @@ void POIFS::writeVolumeInformation() {
 	memcpy(buffer + 0x2C, (char*)&firstAvail, 4);
 
 	/* Entry root directory block */
-	memcpy(buffer + 0x30, rootdir, 32); // BELUM SELESAI
+	memcpy(buffer + 0x30, rootdir, 32);
 
 	/* Closing "!iop" statement */
 	memcpy(buffer + 0x1FC, "!iop", 4);
@@ -334,5 +334,3 @@ int POIFS::writeBlock(short position, const char *buffer, int size, int offset =
 	}
 	return curSize;
 }
-
-/******* NOT FINISHED YET *******/
