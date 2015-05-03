@@ -1,6 +1,9 @@
 #include "fuse_imp.hpp"
 #include "entry.hpp"
+<<<<<<< HEAD
 #include "poi.hpp"
+=======
+>>>>>>> origin/master
 
 POIFS POI;
 
