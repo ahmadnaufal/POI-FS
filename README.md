@@ -17,7 +17,7 @@ Offset | Size (Byte) | Description
 0x00   | 4           | Magic string “poi!”.
 0x04   | 32          | null-terminated string. Default "POI!".fuse.sourceforge.net).
 0x24   | 4           | Block capacity of filesystem, integer 32-bit little endian.
-0x28   | 4           | Block available, integer 32-bit little endian.
+0x28   | 4           | Available block, integer 32-bit little endian.
 0x2C   | 4           | First available block, integer 32-bit little endian.
 0x30   | 32          | Entry block direktory for root ‘/’.
 0x50   | 428         | Empty, ‘\0’ (null character).
