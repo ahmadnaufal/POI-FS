@@ -8,7 +8,7 @@ Volume Information | 1
 Allocation Table   | 256
 Data Pool          | 65536
 
-Each block has size of 512 bytes.
+Each block has size of 512 Bytes.
 
 # Volume Information
 
