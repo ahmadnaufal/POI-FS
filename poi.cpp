@@ -13,7 +13,7 @@ void createPoi(const char *filename, const char *rootname) {
 	target.open(filename, fstream::in | fstream::out | fstream::binary | fstream::trunc);
 
 	/* Initialize the .poi volume information */
-	initVolumeInformation(filename);
+	initVolumeInformation(filename, rootname);
 
 	/* Initialize the .poi allocation table */
 	initAllocTable();
@@ -43,14 +43,14 @@ void initVolumeInformation(const char *filename, const char *rootname) {
 
 	/* initialize capacity of the filesystem */
 	blockCapacity = DATAPOOL_BLOCK_N + 1;
-	memcpy(buffer + 0x24, &blockCapacity, 4);
+	memcpy(buffer + 0x24, (char*)&blockCapacity, 4);
 
 	availBlock = DATAPOOL_BLOCK_N;
-	memcpy(buffer + 0x28, &availBlock, 4);
+	memcpy(buffer + 0x28, (char*)&availBlock, 4);
 
-	/* initialize the first available block */
+	/* initialize the first availBlock block */
 	firstAvail = 1;
-	memcpy(buffer + 0x2C, &firstAvail, 4);
+	memcpy(buffer + 0x2C, (char*)&firstAvail, 4);
 
 	/* Entry root directory block */
 	rootdir = rootname;
@@ -113,9 +113,9 @@ void readVolumeInformation(){
 	}
 	/* baca capacity */
 	memcpy((char*)&blockCapacity, buffer + 0x24, 4);
-	/* baca available */
+	/* baca availBlock */
 	memcpy((char*)&availBlock, buffer + 0x28, 4);
-	/* baca firstEmpty */
+	/* baca firstAvail */
 	memcpy((char*)&firstAvail, buffer + 0x2C, 4);
 }
 
@@ -163,12 +163,12 @@ void setNextBlock(ptr_block position, ptr_block next){
 }
 
 ptr_block allocateBlock(){
-	ptr_block result = firstEmpty;
+	ptr_block result = firstAvail;
 	setNextBlock(result, END_BLOCK);
-	while (nextBlock[firstEmpty] != 0x0000) {
-		firstEmpty++;
+	while (nextBlock[firstAvail] != 0x0000) {
+		firstAvail++;
 	}
-	available--;
+	availBlock--;
 	writeVolumeInformation();
 	return result;
 }
@@ -181,7 +181,7 @@ void freeBlock(ptr_block position){
 		ptr_block temp = nextBlock[position];
 		setNextBlock(position, EMPTY_BLOCK);
 		position = temp;
-		available--;
+		availBlock--;
 	}
 	writeVolumeInformation();
 }
@@ -209,6 +209,7 @@ int readBlock(ptr_block position, char *buffer, int size, int offset = 0){
 	}
 	return size_now;
 }
+
 int writeBlock(ptr_block position, const char *buffer, int size, int offset = 0){
 	/* kalau sudah di END_BLOCK, return */
 	if (position == END_BLOCK) {
