@@ -1,9 +1,13 @@
 #include "poi.hpp"
 
+// Implementasi Inner class Entry
+
+// ctor
 POIFS::Entry::Entry(){
-	memset(blockEntry,'\0',ENTRY_SIZE);
+	memset(blockEntry, 0, ENTRY_SIZE);
 }
 
+// getter
 char* POIFS::Entry::getNama(){
 	char* nama;
 	memcpy(nama, blockEntry + 0x00, 21);
@@ -38,6 +42,7 @@ int POIFS::Entry::getSize(){
 	return size;
 }
 
+// setter
 void POIFS::Entry::setNama(const char* nama){
 	memcpy(blockEntry + 0x00, nama, strlen(nama));
 }
@@ -62,6 +67,16 @@ void POIFS::Entry::setSize(const int size){
 	memcpy(blockEntry + 0x1C, (char*) &size, 4);
 }
 
+// fungsi dan method
+bool POIFS::Entry::isEmpty(){
+	return *(blockEntry) == NULL;
+}
+
+void POIFS::Entry::makeEmpty(){
+	memset(blockEntry, 0, ENTRY_SIZE);
+}
+
+// Implementasi class POIFS
 
 // Constructor & Destructor
 POIFS::POIFS() {
