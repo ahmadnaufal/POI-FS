@@ -39,9 +39,15 @@ public:
 		void setDate(const short date);
 		void setIndex(const short index);
 		void setSize(const int size);
+		
+		// fungsi & method
+		bool isEmpty();
+		void makeEmpty();
+		
 
 	private:
 		char blockEntry[ENTRY_SIZE];
+		short entryPosition;
 	};
 
 	// Constructor & Destructor
