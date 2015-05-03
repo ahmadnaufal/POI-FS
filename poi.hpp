@@ -17,6 +17,15 @@
 
 class POIFS {
 public:
+	// inner class
+	class Entry{
+	public:
+		
+
+	private:
+		char BlockEntry[ENTRY_SIZE];
+	};
+
 	// Constructor & Destructor
 	POIFS();
 	~POIFS();
