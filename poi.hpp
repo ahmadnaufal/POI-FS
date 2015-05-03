@@ -20,10 +20,25 @@ public:
 	// inner class
 	class Entry{
 	public:
-		
+		// ctor
+		Entry();
+
+		char* getNama();
+		char getAttribut();
+		short getTime();
+		short getDate();
+		short getIndex();
+		int getSize();
+
+		void setNama(const char* nama);
+		void setAttribut(const char attribut);
+		void setTime(const short time);
+		void setDate(const short date);
+		void setIndex(const short index);
+		void setSize(const int size);
 
 	private:
-		char BlockEntry[ENTRY_SIZE];
+		char blockEntry[ENTRY_SIZE];
 	};
 
 	// Constructor & Destructor

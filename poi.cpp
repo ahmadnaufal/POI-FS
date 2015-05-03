@@ -1,5 +1,68 @@
 #include "poi.hpp"
 
+POIFS::Entry::Entry(){
+	memset(blockEntry,'\0',ENTRY_SIZE);
+}
+
+char* POIFS::Entry::getNama(){
+	char* nama;
+	memcpy(nama, blockEntry + 0x00, 21);
+	return nama;
+}
+
+char POIFS::Entry::getAttribut(){
+	return blockEntry[22];
+}
+
+short POIFS::Entry::getTime(){
+	short _time;
+	memcpy(_time, (short) &(blockEntry + 0x16), 2);
+	return _time;
+}
+
+short POIFS::Entry::getDate(){
+	short date;
+	memcpy(date, (short) &(blockEntry + 0x18), 2);
+	return date;
+}
+
+short POIFS::Entry::getIndex(){
+	short index;
+	memcpy(index, (short) &(blockEntry + 0x1A), 2);
+	return index;
+}
+
+int POIFS::Entry::getSize(){
+	int size;
+	memcpy(size, (int) &(blockEntry + 0x1C), 4);
+	return size;
+}
+
+void POIFS::Entry::setNama(const char* nama){
+	memcpy(blockEntry + 0x00, nama, strlen(nama));
+}
+
+void POIFS::Entry::setAttribut(const char attribut){
+	memcpy(blockEntry + 0x15, attribut, 1);
+}
+
+void POIFS::Entry::setTime(const short _time){
+	memcpy(blockEntry + 0x16, (char*) &_time, 2);
+}
+
+void POIFS::Entry::setDate(const short date){
+	memcpy(blockEntry + 0x18, (char*) &date, 2);
+}
+
+void POIFS::Entry::setIndex(const short index){
+	memcpy(blockEntry + 0x1A, (char*) &index, 2);
+}
+
+void POIFS::Entry::setSize(const int size){
+	memcpy(blockEntry + 0x1C, (char*) &size, 4);
+}
+
+
 // Constructor & Destructor
 POIFS::POIFS() {
 	time(&mount_time);
