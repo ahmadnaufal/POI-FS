@@ -10,8 +10,8 @@ Entry::Entry() : entryPosition(0), off(0) {
 }
 
 Entry::Entry(ushort enPos, char offs) : entryPosition(enPos), off(offs) {
-	target.seekg((BLOCK_SIZE * 257) + (entryPosition * BLOCK_SIZE) + (off * ENTRY_SIZE));
-	target.read(blockEntry, ENTRY_SIZE);
+	POI.target.seekg((BLOCK_SIZE * 257) + (entryPosition * BLOCK_SIZE) + (off * ENTRY_SIZE));
+	POI.target.read(blockEntry, ENTRY_SIZE);
 }
 
 // getter
@@ -54,7 +54,7 @@ Entry Entry::getNextEntry() {
 	if (off < 15)
 		return Entry(entryPosition, off + 1);
 	else
-		return Entry(nextBlock[entryPosition], 0);
+		return Entry(POI.nextBlock[entryPosition], 0);
 }
 
 Entry Entry::getEntryfromPath(const char* path) {
@@ -101,11 +101,11 @@ Entry Entry::getEmptyEntry() {
 	
 	if (tmp.entryPosition == END_BLOCK) {
 		// if all blocks are full, allocate new empty block for it
-		ushort newPos = allocateBlock();
+		ushort newPos = POI.allocateBlock();
 		ushort lastPos = entryPosition;
 
 		while (nextBlock[lastPos] != END_BLOCK)
-			lastPos = nextBlock[lastPos];
+			lastPos = POI.nextBlock[lastPos];
 		
 		setNextBlock(lastPos, newPos);
 		tmp.entryPosition = newPos;
@@ -132,14 +132,14 @@ Entry Entry::getNewEntryfromPath(const char *path) {
 	if (isEmpty()) {
 		while (!tmp.isEmpty()) {
 			if (tmp.getNextEntry().entryPosition == END_BLOCK)
-				tmp = Entry(allocateBlock(), 0);
+				tmp = Entry(POI.allocateBlock(), 0);
 			else
 				tmp = tmp.getNextEntry();
 		}
 		
 		tmp.setNama(rootPath.c_str());
 		tmp.setAttribut(0xF);
-		tmp.setIndex(allocateBlock());
+		tmp.setIndex(POI.allocateBlock());
 		tmp.setSize(BLOCK_SIZE);
 		tmp.setTime(0);
 		tmp.setDate(0);
@@ -238,4 +238,11 @@ void Entry::setCurrentTime() {
 	memcpy(blockEntry + 0x16, (char*)&curtime, 2);
 
 	memcpy(blockEntry + 0x18, (char*)&curdate, 2);
+}
+
+void Entry::write() {
+	if (entryPosition != END_BLOCK) {
+		POI.target.seekp(BLOCK_SIZE * 257 + entryPosition * BLOCK_SIZE + off * ENTRY_SIZE);
+		POI.target.write(blockEntry, ENTRY_SIZE);
+	}
 }

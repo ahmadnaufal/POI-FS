@@ -1,6 +1,8 @@
 #ifndef ENTRY_H
 #define ENTRY_H
 
+#include "poi.hpp"
+
 class Entry{
 	public:
 		// ctor
@@ -36,7 +38,9 @@ class Entry{
 		time_t getEntryTime();
 		void setCurrentTime();	
 
-	private:
+		void writeEntry();
+
+	/* attributes */
 		char blockEntry[ENTRY_SIZE];	/* the size of the entry block */
 		ushort entryPosition;			/* the position of the block */
 		char off;						/* offset of the block (from 0-15) */

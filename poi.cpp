@@ -94,7 +94,7 @@ void POIFS::readPoi(const char *filename){
 	}
 	catch (exception& e) {
 		target.close();
-		throw runtime_error("File not found");
+		cout << "File not found!";
 		cout << e.what();
 
 		return;
@@ -114,7 +114,7 @@ void POIFS::readVolumeInformation(){
 
 	if (string(buffer, 4) != "poi!") {
 		target.close();
-		throw runtime_error("File is not a valid POI file");
+		cout << "File is not a valid POI file";
 		return;
 	}
 
@@ -215,7 +215,7 @@ void POIFS::releaseBlock(short position){
 }
 
 /* bagian baca/tulis block */
-int POIFS::readBlock(short position, char *buffer, int size, int offset = 0){
+int POIFS::readBlock(short position, char *buffer, int size, int offset){
 	/* If at the end of file / END_BLOCK */
 	if (position == END_BLOCK)
 		return 0;
@@ -243,7 +243,7 @@ int POIFS::readBlock(short position, char *buffer, int size, int offset = 0){
 	return curSize;
 }
 
-int POIFS::writeBlock(short position, const char *buffer, int size, int offset = 0){
+int POIFS::writeBlock(short position, const char *buffer, int size, int offset){
 	/* If at the end of file / END_BLOCK */
 	if (position == END_BLOCK)
 		return 0;

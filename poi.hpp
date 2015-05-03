@@ -1,13 +1,12 @@
 #ifndef POIFS_H
 #define POIFS_H
 
-extern POIFS POI;
-
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <string>
 #include <ctime>
+#include <iostream>
 
  /* Define constants used by the filesystem */
 #define BLOCK_SIZE 512
@@ -59,7 +58,7 @@ public:
 
 	/*** NOT FINISHED YET ***/
 
-private:
+/* attributes */
 	fstream target;			/* current .poi file to be handled by POIFS */
 	
 	string rootdir;			/* root directory for mounting */
@@ -71,5 +70,7 @@ private:
 	int firstAvail;			/* number of the first available block in the data pool */
 	time_t mount_time;		/* time mounting .poi file */
 };
+
+extern POIFS POI;
 
 #endif

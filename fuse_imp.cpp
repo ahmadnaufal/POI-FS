@@ -1,6 +1,8 @@
 #include "fuse_imp.hpp"
-#include "fuse_imp"
+#include "entry.hpp"
+#include "poi.hpp"
 
+POIFS POI;
 
 /*** IMPLEMENTING FUSE OPERATIONS DEFINED ON THE API ***/
 
@@ -11,7 +13,7 @@ int poi_getattr(const char *path, struct stat *stbuf) {
 		/* if the path is a root path */
 		stbuf->st_nlink = 1;
 		stbuf->st_mode = S_IFDIR | 0777;
-		stbuf->st_mtime = mount_time;
+		stbuf->st_mtime = POI.mount_time;
 	} else {
 		Entry entry = Entry(0, 0).getEntryfromPath(path);
 		
@@ -46,7 +48,7 @@ int poi_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offse
 	// filler is applied to the dir
 	while (tmp.entryPosition != END_BLOCK) {
 		if(!tmp.isEmpty())
-			filler(buf, tmp.getNama().c_str(), NULL, 0);
+			filler(buf, tmp.getNama(), NULL, 0);
 		tmp = tmp.getNextEntry();
 	}
 	
@@ -75,7 +77,7 @@ int poi_mkdir(const char *path, mode_t mode){
 	tmp.setNama(path + i + 1);
 	tmp.setAttribut(0x0F);
 	tmp.setCurrentTime();
-	tmp.setIndex(allocateBlock());
+	tmp.setIndex(POI.allocateBlock());
 	tmp.setSize(0);
 
 	tmp.writeEntry();
@@ -105,7 +107,7 @@ int poi_mknod(const char *path, mode_t mode, dev_t dev){
 	tmp.setNama(path + i + 1);
 	tmp.setAttribut(0x06);
 	tmp.setCurrentTime();
-	tmp.setIndex(allocateBlock());
+	tmp.setIndex(POI.allocateBlock());
 	tmp.setSize(0);
 
 	tmp.writeEntry();
@@ -121,7 +123,7 @@ int poi_read(const char *path, char *buf, size_t size, off_t offset, struct fuse
 	if(tmp.isEmpty()) // if the entry is empty
 		return -ENOENT;
 	
-	return readBlock(idx, buf, size, offset); // pass the reading to POIFS method readBlock
+	return POI.readBlock(idx, buf, size, offset); // pass the reading to POIFS method readBlock
 }
 
 int poi_rmdir(const char *path){
@@ -131,7 +133,7 @@ int poi_rmdir(const char *path){
 		return -ENOENT; // if the entry is empty, let it be
 	
 	// free the block from the entry index
-	releaseBlock(entry.getIndex());
+	POI.releaseBlock(tmp.getIndex());
 	
 	// make the entry becomes empty
 	tmp.makeEmpty();
@@ -142,11 +144,11 @@ int poi_rmdir(const char *path){
 int poi_unlink(const char *path){
 	Entry tmp = Entry(0,0).getEntryfromPath(path);
 
-	if (entry.getAttribut() & 0x8)	
+	if (tmp.getAttribut() & 0x8)	
 		return -ENOENT;		// if the entry is from a directory, let it be
 	else {
 		// free the block from the entry index
-		releaseBlock(entry.getIndex());	
+		POI.releaseBlock(tmp.getIndex());	
 		// make the entry becomes empty
 		tmp.makeEmpty();
 	}
@@ -160,14 +162,14 @@ int poi_rename(const char *oldpath, const char *newpath) {
 
 	if(!oldentry.isEmpty()){
 		// set all 
-		newentry.setName(oldentry.getNama().c_str());
-		newentry.setAttr(oldentry.getAttribut());
+		newentry.setNama(oldentry.getNama());
+		newentry.setAttribut(oldentry.getAttribut());
 		newentry.setIndex(oldentry.getIndex());
 		newentry.setSize(oldentry.getSize());
 		newentry.setTime(oldentry.getTime());
 		newentry.setDate(oldentry.getDate());
-		newentry.write();
-		/* set entry asal jadi kosong */
+		newentry.writeEntry();
+		
 		oldentry.makeEmpty();
 	}
 	else
@@ -182,13 +184,13 @@ int poi_write(const char *path, const char *buf, size_t size, off_t offset, stru
 	ushort idx = tmp.getIndex();
 	
 	// if the entry is empty, let it be
-	if(entry.isEmpty())
+	if(tmp.isEmpty())
 		return -ENOENT;
 	
 	tmp.setSize(offset + size);
 	tmp.writeEntry();
 	
-	return writeBlock(idx, buf, size, offset);;
+	return POI.writeBlock(idx, buf, size, offset);;
 }
 
 int poi_truncate(const char *path, off_t newoff){
@@ -202,14 +204,14 @@ int poi_truncate(const char *path, off_t newoff){
 	while (newoff > 0) {
 		newoff -= BLOCK_SIZE;
 		if (newoff > 0) {	// allocate new entry when full
-			if (nextBlock[entryPosition] == END_BLOCK)
-				setNextBlock(entryPosition, allocateBlock());
-			entryPosition = nextBlock[entryPosition];
+			if (POI.nextBlock[tmp.entryPosition] == END_BLOCK)
+				POI.setNextBlock(tmp.entryPosition, POI.allocateBlock());
+			tmp.entryPosition = POI.nextBlock[tmp.entryPosition];
 		}
 	}
 
-	releaseBlock(nextBlock[entryPosition]);
-	setNextBlock(entryPosition, END_BLOCK);
+	POI.releaseBlock(POI.nextBlock[tmp.entryPosition]);
+	POI.setNextBlock(tmp.entryPosition, END_BLOCK);
 	
 	return 0;
 }
