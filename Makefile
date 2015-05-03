@@ -1,5 +1,5 @@
 all: mount-poi.cpp poi.o fuse_imp.o
-	g++ main.cpp ccfs.o fuse_impl.o -D_FILE_OFFSET_BITS=64 `pkg-config fuse --cflags --libs` -o ccfs
+	g++ mount-poi.cpp poi.o fuse_imp.o -D_FILE_OFFSET_BITS=64 `pkg-config fuse --cflags --libs` -o poi
 
 poi.o : poi.hpp poi.cpp
 	g++ -Wall -c poi.cpp -D_FILE_OFFSET_BITS=64
