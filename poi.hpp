@@ -50,6 +50,8 @@ public:
 	int writeBlock(ptr_block position, const char *buffer, int size, int offset = 0);
 
 
+	/*** NOT FINISHED YET ***/
+
 private:
 	fstream target;			/* current .poi file to be handled by POIFS */
 	string rootdir;			/* root directory for mounting */

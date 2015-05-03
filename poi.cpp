@@ -53,7 +53,8 @@ void initVolumeInformation(const char *filename, const char *rootname) {
 	memcpy(buffer + 0x2C, &firstAvail, 4);
 
 	/* Entry root directory block */
-	memcpy(buffer + 0x30, path, 32); // BELUM SELESAI
+	rootdir = rootname;
+	memcpy(buffer + 0x30, rootdir, 32); // BELUM SELESAI
 
 	/* Closing "!iop" statement */
 	memcpy(buffer + 0x1FC, "!iop", 4);
